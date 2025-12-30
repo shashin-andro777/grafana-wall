@@ -1,4 +1,0 @@
-curl -fSL \
-  -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
-  "${{ secrets.GRAFANA_URL }}/render/d-solo/${{ secrets.DASH_UID }}/${{ secrets.DASH_SLUG }}?orgId=1&panelId=${{ secrets.PANEL_ID }}&from=now-6h&to=now&width=1024&height=768&theme=dark" \
-  -o dashboard.png
