@@ -1,0 +1,40 @@
+name: Render Grafana Panel to PNG
+
+on:
+  schedule:
+    - cron: "*/1 * * * *"   # every 60 seconds
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Render PNG from Grafana
+        run: |
+          set -e
+          echo "Rendering Grafana panel..."
+          echo "URL: ${{ secrets.GRAFANA_URL }}"
+          echo "UID: ${{ secrets.DASH_UID }}"
+          echo "SLUG: ${{ secrets.DASH_SLUG }}"
+          echo "PANEL: ${{ secrets.PANEL_ID }}"
+
+          curl -fSL \
+            -H "Authorization: Bearer ${{ secrets.GRAFANA_TOKEN }}" \
+            "${{ secrets.GRAFANA_URL }}/render/d-solo/${{ secrets.DASH_UID }}/${{ secrets.DASH_SLUG }}?orgId=1&panelId=${{ secrets.PANEL_ID }}&from=now-6h&to=now&width=1024&height=768&theme=dark" \
+            -o dashboard.png
+
+          ls -lh dashboard.png
+
+      - name: Commit updated image
+        run: |
+          git config user.name "grafana-wall-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add dashboard.png
+          git commit -m "Update dashboard.png" || exit 0
+          git push
