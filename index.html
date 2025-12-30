@@ -1,8 +1,23 @@
 <!doctype html>
 <html>
-  <body style="margin:0;background:black">
-    <h1 style="color:white;text-align:center">
-      Grafana Wall Placeholder
-    </h1>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="60">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; background: black; overflow: hidden; }
+    img { width: 100vw; height: 100vh; object-fit: contain; display: block; }
+  </style>
+</head>
+<body>
+  <img id="dash" src="dashboard.png?cb=1" alt="Grafana Wall">
+  <script>
+    (function () {
+      var img = document.getElementById("dash");
+      function bust() { img.src = "dashboard.png?cb=" + new Date().getTime(); }
+      bust();
+      setInterval(bust, 60000);
+    })();
+  </script>
+</body>
 </html>
