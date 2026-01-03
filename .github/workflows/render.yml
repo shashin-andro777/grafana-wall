@@ -1,4 +1,4 @@
-name: Render Full Dashboard (stitched PNG)
+name: Render Full Dashboard (4-panel grid)
 
 on:
   schedule:
@@ -20,109 +20,52 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
-      - name: Render panels + stitch into one dashboard.png
+      - name: Render 4 panels + stitch into dashboard.png
         run: |
           set -euo pipefail
 
-          # ---- Sanitize secrets (prevents hidden CR/LF issues) ----
+          # ---- Sanitize secrets (avoids hidden newline issues) ----
           TOKEN="$(printf '%s' "${{ secrets.GRAFANA_TOKEN }}" | tr -d '\r\n')"
           BASE="$(printf '%s' "${{ secrets.GRAFANA_URL }}" | tr -d '\r\n')"
           UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
           SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
-          # ---- Time range / theme (edit if you want) ----
+          # ---- Time range / theme ----
           FROM="now-6h"
           TO="now"
           THEME="dark"
 
-          # ---- PANEL IDs (REPLACE THESE) ----
-          # Find panelId by opening a panel -> View -> URL contains panelId=XX
-          P_Finances=3
+          # ---- Your panel IDs ----
+          P_FINANCES=3
           P_WEIGHT_TOP=4
           P_YOUTUBE=5
           P_WEIGHT_BOTTOM=6
 
-          # ---- Target final image size for iPad Gen 1 landscape ----
-          FINAL_W=1024
-          FINAL_H=768
-
-          # ---- Layout sizes (tuned to your screenshot style) ----
-          # Top row: 3 small stat panels + 1 large right panel
-          STAT_W=230
-          STAT_H=180
-          RIGHT_W=310
-          RIGHT_H=180
-
-          # Bottom row: 1 wide left gauge + 2 stacked right panels
-          WIDE_W=710
-          WIDE_H=520
-          RIGHT2_W=310
-          RIGHT2_H=255
-
-          # Spacing/margins
-          M=10      # outer margin
-          G=10      # gap
+          # ---- Panel render size (2x2 grid -> final ~1024x768) ----
+          # Each panel 512x384, combined -> 1024x768
+          W=512
+          H=384
 
           render_panel () {
             local PANEL_ID="$1"
             local OUT="$2"
-            local W="$3"
-            local H="$4"
-
             local URL="${BASE}/render/d-solo/${UID}/${SLUG}?orgId=1&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${W}&height=${H}&theme=${THEME}"
             echo "Rendering panel ${PANEL_ID} -> ${OUT}"
             curl -fSL -H "Authorization: Bearer ${TOKEN}" "${URL}" -o "${OUT}"
           }
 
-          # ---- Render each panel as its own PNG ----
-          render_panel "${P_ASSETS}"        p_assets.png        "${STAT_W}"  "${STAT_H}"
-          render_panel "${P_LIABILITIES}"   p_liabilities.png   "${STAT_W}"  "${STAT_H}"
-          render_panel "${P_NET}"           p_net.png           "${STAT_W}"  "${STAT_H}"
-          render_panel "${P_WEIGHT_TOP}"    p_weight_top.png    "${RIGHT_W}" "${RIGHT_H}"
-          render_panel "${P_YOUTUBE}"       p_youtube.png       "${WIDE_W}"  "${WIDE_H}"
-          render_panel "${P_WEIGHT_BOTTOM}" p_weight_bottom.png "${RIGHT2_W}" "${RIGHT2_H}"
+          render_panel "${P_FINANCES}"      p1.png
+          render_panel "${P_WEIGHT_TOP}"    p2.png
+          render_panel "${P_YOUTUBE}"       p3.png
+          render_panel "${P_WEIGHT_BOTTOM}" p4.png
 
-          # ---- Create a black canvas and composite panels onto it ----
-          # Coordinates are chosen to mimic your screenshot layout:
-          # Row 1: Assets | Liabilities | Net | (large right number panel)
-          # Row 2: Wide left gauge | Right stacked panels
-          convert -size ${FINAL_W}x${FINAL_H} xc:black canvas.png
+          # ---- Stitch into a single dashboard.png (2x2) ----
+          montage p1.png p2.png p3.png p4.png \
+            -tile 2x2 \
+            -geometry +0+0 \
+            dashboard.png
 
-          # Top row positions
-          X1=$M
-          Y1=$M
-          X2=$((M + STAT_W + G))
-          X3=$((M + (STAT_W + G)*2))
-          X4=$((FINAL_W - M - RIGHT_W))
-
-          convert canvas.png \
-            \( p_assets.png \)        -geometry +${X1}+${Y1} -composite \
-            \( p_liabilities.png \)   -geometry +${X2}+${Y1} -composite \
-            \( p_net.png \)           -geometry +${X3}+${Y1} -composite \
-            \( p_weight_top.png \)    -geometry +${X4}+${Y1} -composite \
-            stitched.png
-
-          # Bottom row positions
-          Y2=$((M + STAT_H + G))
-          XW=$M
-          XR=$((FINAL_W - M - RIGHT2_W))
-
-          # Right stack: top and bottom
-          YR1=$Y2
-          YR2=$((Y2 + RIGHT2_H + G))
-
-          convert stitched.png \
-            \( p_youtube.png \)       -geometry +${XW}+${Y2} -composite \
-            \( p_weight_top.png \)    -geometry +${X4}+${Y1} -composite \
-            \( p_weight_bottom.png \) -geometry +${XR}+${YR2} -composite \
-            stitched2.png
-
-          # NOTE: We already placed p_weight_top in top row; stitched2 keeps it there.
-          # If you don't want it duplicated, remove the line that composites p_weight_top here.
-
-          mv stitched2.png dashboard.png
-
-          echo "Final image:"
+          echo "Final stitched image:"
           ls -lh dashboard.png
 
       - name: Commit updated image
@@ -130,5 +73,5 @@ jobs:
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
           git add dashboard.png
-          git commit -m "Update stitched dashboard.png" || exit 0
+          git commit -m "Update dashboard.png" || exit 0
           git push
