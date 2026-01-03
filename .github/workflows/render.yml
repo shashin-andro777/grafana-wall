@@ -37,9 +37,7 @@ jobs:
 
           # ---- PANEL IDs (REPLACE THESE) ----
           # Find panelId by opening a panel -> View -> URL contains panelId=XX
-          P_ASSETS=1
-          P_LIABILITIES=2
-          P_NET=3
+          P_Finances=3
           P_WEIGHT_TOP=4
           P_YOUTUBE=5
           P_WEIGHT_BOTTOM=6
