@@ -1,4 +1,4 @@
-name: Render Full Dashboard (4-panel grid)
+name: Render Full Dashboard (gridPos-accurate)
 
 on:
   schedule:
@@ -20,49 +20,100 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
-      - name: Render 4 panels + stitch into dashboard.png
+      - name: Render panels using gridPos proportions and stitch
         run: |
           set -euo pipefail
 
-          # ---- Sanitize secrets (avoids hidden newline issues) ----
+          # ---- Sanitize secrets (prevents hidden CR/LF issues) ----
           TOKEN="$(printf '%s' "${{ secrets.GRAFANA_TOKEN }}" | tr -d '\r\n')"
           BASE="$(printf '%s' "${{ secrets.GRAFANA_URL }}" | tr -d '\r\n')"
           UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
           SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
-          # ---- Time range / theme ----
+          # ---- Dashboard render options ----
           FROM="now-6h"
           TO="now"
           THEME="dark"
 
-          # ---- Your panel IDs ----
-          P_FINANCES=3
-          P_WEIGHT_TOP=4
-          P_YOUTUBE=5
-          P_WEIGHT_BOTTOM=6
+          # ---- Target canvas (iPad Gen 1 landscape) ----
+          CANVAS_W=1024
+          CANVAS_H=768
+          M=10   # outer margin in pixels
 
-          # ---- Panel render size (2x2 grid -> final ~1024x768) ----
-          # Each panel 512x384, combined -> 1024x768
-          W=512
-          H=384
+          # ---- Grafana grid (from your dashboard JSON) ----
+          GRID_W=24
+          GRID_H=11   # max(y+h) from your JSON (row at y0 h1, bottom panels at y6 h5 => 11)
+
+          # ---- Panel gridPos from your JSON (id, x, y, w, h) ----
+          # id=3  gridPos: x0  y1  w11 h5
+          # id=4  gridPos: x11 y1  w7  h5
+          # id=5  gridPos: x0  y6  w11 h5
+          # id=6  gridPos: x11 y6  w7  h5
+          P3_X=0;  P3_Y=1;  P3_W=11; P3_H=5
+          P4_X=11; P4_Y=1;  P4_W=7;  P4_H=5
+          P5_X=0;  P5_Y=6;  P5_W=11; P5_H=5
+          P6_X=11; P6_Y=6;  P6_W=7;  P6_H=5
+
+          # ---- Compute pixels per grid unit (float), then per-panel pixel rectangles (int) ----
+          python3 - <<'PY'
+          import os, math
+
+          CANVAS_W = int(os.environ["CANVAS_W"])
+          CANVAS_H = int(os.environ["CANVAS_H"])
+          M        = int(os.environ["M"])
+          GRID_W   = int(os.environ["GRID_W"])
+          GRID_H   = int(os.environ["GRID_H"])
+
+          unit_w = (CANVAS_W - 2*M) / GRID_W
+          unit_h = (CANVAS_H - 2*M) / GRID_H
+
+          def rect(name):
+              x = int(os.environ[f"{name}_X"])
+              y = int(os.environ[f"{name}_Y"])
+              w = int(os.environ[f"{name}_W"])
+              h = int(os.environ[f"{name}_H"])
+              px = int(round(M + x * unit_w))
+              py = int(round(M + y * unit_h))
+              pw = max(1, int(round(w * unit_w)))
+              ph = max(1, int(round(h * unit_h)))
+              return px, py, pw, ph
+
+          for name in ["P3", "P4", "P5", "P6"]:
+              px, py, pw, ph = rect(name)
+              print(f'echo "{name}: x={px} y={py} w={pw} h={ph}"')
+              print(f'export {name}_PX={px} {name}_PY={py} {name}_PW={pw} {name}_PH={ph}')
+
+          print(f'echo "unit_w={unit_w:.4f} unit_h={unit_h:.4f}  (GRID {GRID_W}x{GRID_H}, canvas {CANVAS_W}x{CANVAS_H}, margin {M})"')
+          PY
+          ) > sizes.sh
+
+          # Load the exported sizes into this shell
+          source sizes.sh
 
           render_panel () {
             local PANEL_ID="$1"
             local OUT="$2"
+            local W="$3"
+            local H="$4"
             local URL="${BASE}/render/d-solo/${UID}/${SLUG}?orgId=1&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${W}&height=${H}&theme=${THEME}"
-            echo "Rendering panel ${PANEL_ID} -> ${OUT}"
+            echo "Rendering panel ${PANEL_ID} -> ${OUT} (${W}x${H})"
             curl -fSL -H "Authorization: Bearer ${TOKEN}" "${URL}" -o "${OUT}"
           }
 
-          render_panel "${P_FINANCES}"      p1.png
-          render_panel "${P_WEIGHT_TOP}"    p2.png
-          render_panel "${P_YOUTUBE}"       p3.png
-          render_panel "${P_WEIGHT_BOTTOM}" p4.png
+          # Render each panel at its computed pixel size
+          render_panel 3 p3.png "${P3_PW}" "${P3_PH}"
+          render_panel 4 p4.png "${P4_PW}" "${P4_PH}"
+          render_panel 5 p5.png "${P5_PW}" "${P5_PH}"
+          render_panel 6 p6.png "${P6_PW}" "${P6_PH}"
 
-          # ---- Stitch into a single dashboard.png (2x2) ----
-          montage p1.png p2.png p3.png p4.png \
-            -tile 2x2 \
-            -geometry +0+0 \
+          # Create final canvas and composite panels at computed pixel positions
+          convert -size ${CANVAS_W}x${CANVAS_H} xc:black canvas.png
+
+          convert canvas.png \
+            \( p3.png \) -geometry +${P3_PX}+${P3_PY} -composite \
+            \( p4.png \) -geometry +${P4_PX}+${P4_PY} -composite \
+            \( p5.png \) -geometry +${P5_PX}+${P5_PY} -composite \
+            \( p6.png \) -geometry +${P6_PX}+${P6_PY} -composite \
             dashboard.png
 
           echo "Final stitched image:"
@@ -73,5 +124,5 @@ jobs:
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
           git add dashboard.png
-          git commit -m "Update dashboard.png" || exit 0
+          git commit -m "Update dashboard.png (gridPos)" || exit 0
           git push
