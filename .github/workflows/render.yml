@@ -1,4 +1,4 @@
-name: Render Grafana Panels (p3-p6)
+name: Render Wall Dashboards (finance/health/misc)
 
 on:
   schedule:
@@ -16,28 +16,35 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Render panel PNGs
+      - name: Render dashboard PNGs
         run: |
           set -euo pipefail
 
           TOKEN="$(printf '%s' "${{ secrets.GRAFANA_TOKEN }}" | tr -d '\r\n')"
           BASE="$(printf '%s' "${{ secrets.GRAFANA_URL }}" | tr -d '\r\n')"
-          DASH_UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
-          DASH_SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
           ORG_ID="1"
           FROM="now-6h"
           TO="now"
           THEME="dark"
-          WIDTH="1024"
-          HEIGHT="768"
 
-          render_panel () {
-            local PANEL_ID="$1"
-            local OUT="$2"
-            local URL="${BASE}/render/d-solo/${DASH_UID}/${DASH_SLUG}?orgId=${ORG_ID}&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${WIDTH}&height=${HEIGHT}&theme=${THEME}"
+          # iPad-friendly render size; you can adjust later
+          WIDTH="1920"
+          HEIGHT="1080"
 
-            echo "Rendering panelId=${PANEL_ID} -> ${OUT}"
+          render_dash () {
+            local UID="$1"
+            local SLUG="$2"
+            local OUT="$3"
+
+            UID="$(printf '% նոյ' "${UID}" | tr -d '\r\n')" || true
+            SLUG="$(printf '%s' "${SLUG}" | tr -d '\r\n')"
+
+            local URL="${BASE}/render/d/${UID}/${SLUG}?orgId=${ORG_ID}&from=${FROM}&to=${TO}&width=${WIDTH}&height=${HEIGHT}&theme=${THEME}"
+
+            echo "Rendering dashboard -> ${OUT}"
+            echo "URL(no token): ${URL}"
+
             HTTP_CODE="$(curl -sS -L \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "X-Grafana-Org-Id: ${ORG_ID}" \
@@ -47,40 +54,39 @@ jobs:
 
             echo "HTTP_CODE=${HTTP_CODE}"
             if [ "${HTTP_CODE}" != "200" ]; then
-              echo "ERROR: HTTP ${HTTP_CODE} for panel ${PANEL_ID}"
+              echo "ERROR: HTTP ${HTTP_CODE} while rendering ${OUT}"
               exit 1
             fi
 
+            # Fail if Grafana rendered an error image
             if strings "${OUT}" | grep -qi "panel not found"; then
-              echo "ERROR: '${OUT}' contains 'Panel not found'"
+              echo "ERROR: '${OUT}' contains 'Panel not found' (check UID/SLUG secrets)."
               exit 1
             fi
 
             ls -lh "${OUT}"
           }
 
-          # Your panel IDs
-          render_panel 3 p3.png
-          render_panel 4 p4.png
-          render_panel 5 p5.png
-          render_panel 6 p6.png
+          # Render the 3 dashboards (UID/SLUG pulled from secrets)
+          render_dash "${{ secrets.FIN_UID }}"    "${{ secrets.FIN_SLUG }}"    "finance.png"
+          render_dash "${{ secrets.HEALTH_UID }}" "${{ secrets.HEALTH_SLUG }}" "health.png"
+          render_dash "${{ secrets.MISC_UID }}"   "${{ secrets.MISC_SLUG }}"   "misc.png"
 
-          echo "Done:"
-          ls -lh p3.png p4.png p5.png p6.png
+          echo "Rendered files:"
+          ls -lh finance.png health.png misc.png
 
-      - name: Commit updated PNGs
+      - name: Commit updated images
         run: |
           set -euo pipefail
-
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
 
-          git add p3.png p4.png p5.png p6.png
+          git add finance.png health.png misc.png
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
 
-          git commit -m "Update p3-p6 panel PNGs"
+          git commit -m "Update wall PNGs"
           git push
