@@ -31,6 +31,7 @@ jobs:
           DASH_SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
 
+
           FROM="now-6h"
           TO="now"
           THEME="dark"
@@ -94,7 +95,7 @@ jobs:
             local OUT="$2"
             local W="$3"
             local H="$4"
-            local URL="${BASE}/render/d-solo/${UID}/${SLUG}?orgId=1&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${W}&height=${H}&theme=${THEME}"
+            local URL="${BASE}/render/d-solo/${DASH_UID}/${DASH_SLUG}?orgId=1&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${W}&height=${H}&theme=${THEME}"
             echo "Rendering panel ${PANEL_ID} -> ${OUT} (${W}x${H})"
             curl -fSL -H "Authorization: Bearer ${TOKEN}" "${URL}" -o "${OUT}"
           }
