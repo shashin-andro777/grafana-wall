@@ -28,21 +28,24 @@ jobs:
           TO="now"
           THEME="dark"
 
-          # iPad-friendly render size; you can adjust later
+          # Good default for wall screens. Adjust later if you want.
           WIDTH="1920"
           HEIGHT="1080"
 
           render_dash () {
-            local UID="$1"
-            local SLUG="$2"
+            local DASH_UID_IN="$1"
+            local DASH_SLUG_IN="$2"
             local OUT="$3"
 
-            UID="$(printf '% նոյ' "${UID}" | tr -d '\r\n')" || true
-            SLUG="$(printf '%s' "${SLUG}" | tr -d '\r\n')"
+            local DASH_UID_CLEAN
+            local DASH_SLUG_CLEAN
 
-            local URL="${BASE}/render/d/${UID}/${SLUG}?orgId=${ORG_ID}&from=${FROM}&to=${TO}&width=${WIDTH}&height=${HEIGHT}&theme=${THEME}"
+            DASH_UID_CLEAN="$(printf '%s' "${DASH_UID_IN}" | tr -d '\r\n')"
+            DASH_SLUG_CLEAN="$(printf '%s' "${DASH_SLUG_IN}" | tr -d '\r\n')"
 
-            echo "Rendering dashboard -> ${OUT}"
+            local URL="${BASE}/render/d/${DASH_UID_CLEAN}/${DASH_SLUG_CLEAN}?orgId=${ORG_ID}&from=${FROM}&to=${TO}&width=${WIDTH}&height=${HEIGHT}&theme=${THEME}"
+
+            echo "Rendering -> ${OUT}"
             echo "URL(no token): ${URL}"
 
             HTTP_CODE="$(curl -sS -L \
@@ -58,7 +61,7 @@ jobs:
               exit 1
             fi
 
-            # Fail if Grafana rendered an error image
+            # Fail if Grafana returned an error image
             if strings "${OUT}" | grep -qi "panel not found"; then
               echo "ERROR: '${OUT}' contains 'Panel not found' (check UID/SLUG secrets)."
               exit 1
@@ -78,6 +81,7 @@ jobs:
       - name: Commit updated images
         run: |
           set -euo pipefail
+
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
 
