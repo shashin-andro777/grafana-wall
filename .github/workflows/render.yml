@@ -1,4 +1,4 @@
-name: Render Grafana Panels (rotating PNGs)
+name: Render Grafana Panels (p3-p6)
 
 on:
   schedule:
@@ -37,30 +37,41 @@ jobs:
             local OUT="$2"
             local URL="${BASE}/render/d-solo/${DASH_UID}/${DASH_SLUG}?orgId=${ORG_ID}&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${WIDTH}&height=${HEIGHT}&theme=${THEME}"
 
-            echo "Rendering panel ${PANEL_ID} → ${OUT}"
-            curl -fSL \
+            echo "Rendering panelId=${PANEL_ID} -> ${OUT}"
+            HTTP_CODE="$(curl -sS -L \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "X-Grafana-Org-Id: ${ORG_ID}" \
-              "${URL}" \
-              -o "${OUT}"
+              -o "${OUT}" \
+              -w "%{http_code}" \
+              "${URL}")"
 
-            if strings "${OUT}" | grep -qi "panel not found"; then
-              echo "ERROR: Panel ${PANEL_ID} returned 'Panel not found'"
+            echo "HTTP_CODE=${HTTP_CODE}"
+            if [ "${HTTP_CODE}" != "200" ]; then
+              echo "ERROR: HTTP ${HTTP_CODE} for panel ${PANEL_ID}"
               exit 1
             fi
+
+            if strings "${OUT}" | grep -qi "panel not found"; then
+              echo "ERROR: '${OUT}' contains 'Panel not found'"
+              exit 1
+            fi
+
+            ls -lh "${OUT}"
           }
 
-          # ---- YOUR PANEL IDS ----
+          # Your panel IDs
           render_panel 3 p3.png
           render_panel 4 p4.png
           render_panel 5 p5.png
           render_panel 6 p6.png
 
+          echo "Done:"
           ls -lh p3.png p4.png p5.png p6.png
 
       - name: Commit updated PNGs
         run: |
           set -euo pipefail
+
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
 
@@ -71,5 +82,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Update panel PNGs"
+          git commit -m "Update p3-p6 panel PNGs"
           git push
