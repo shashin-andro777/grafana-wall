@@ -1,8 +1,8 @@
-name: Render Full Dashboard (debug panels)
+name: Render Grafana Panels (separate PNGs)
 
 on:
   schedule:
-    - cron: "*/1 * * * *"
+    - cron: "*/1 * * * *"   # every 60 seconds
   workflow_dispatch:
 
 permissions:
@@ -12,15 +12,10 @@ jobs:
   render:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install ImageMagick
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-
-      - name: Render panels + stitch (and save debug images)
+      - name: Render panels
         run: |
           set -euo pipefail
 
@@ -29,95 +24,43 @@ jobs:
           DASH_UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
           DASH_SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
+          ORG_ID="1"
           FROM="now-6h"
           TO="now"
           THEME="dark"
-          ORG_ID="1"
 
-          CANVAS_W=1024
-          CANVAS_H=768
-          M=10
+          # Your panel IDs
+          P3=3
+          P4=4
+          P5=5
+          P6=6
 
-          # Used grid size from your JSON (fills canvas)
-          GRID_W=18
-          GRID_H=10
-
-          # gridPos from your JSON
-          P3_X=0;  P3_Y=0;  P3_W=11; P3_H=5
-          P4_X=11; P4_Y=0;  P4_W=7;  P4_H=5
-          P5_X=0;  P5_Y=5;  P5_W=11; P5_H=5
-          P6_X=11; P6_Y=5;  P6_W=7;  P6_H=5
-
-          python3 - <<'PY' > sizes.sh
-          import os
-          CANVAS_W=int(os.environ["CANVAS_W"]); CANVAS_H=int(os.environ["CANVAS_H"]); M=int(os.environ["M"])
-          GRID_W=int(os.environ["GRID_W"]); GRID_H=int(os.environ["GRID_H"])
-          unit_w=(CANVAS_W-2*M)/GRID_W
-          unit_h=(CANVAS_H-2*M)/GRID_H
-          def rect(name):
-              x=int(os.environ[f"{name}_X"]); y=int(os.environ[f"{name}_Y"])
-              w=int(os.environ[f"{name}_W"]); h=int(os.environ[f"{name}_H"])
-              px=int(round(M + x*unit_w)); py=int(round(M + y*unit_h))
-              pw=max(50, int(round(w*unit_w)))  # enforce sane minimums
-              ph=max(50, int(round(h*unit_h)))
-              return px,py,pw,ph
-          for name in ["P3","P4","P5","P6"]:
-              px,py,pw,ph=rect(name)
-              print(f'export {name}_PX={px} {name}_PY={py} {name}_PW={pw} {name}_PH={ph}')
-              print(f'echo "{name}: x={px} y={py} w={pw} h={ph}"')
-          print(f'echo "unit_w={unit_w:.4f} unit_h={unit_h:.4f}"')
-          PY
-
-          source sizes.sh
-
-          mkdir -p debug
+          # Render size (iPad-friendly). Adjust if you want.
+          W=1024
+          H=768
 
           render_panel () {
             local PANEL_ID="$1"
             local OUT="$2"
-            local W="$3"
-            local H="$4"
-
             local URL="${BASE}/render/d-solo/${DASH_UID}/${DASH_SLUG}?orgId=${ORG_ID}&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${W}&height=${H}&theme=${THEME}"
-
-            echo "Rendering panel ${PANEL_ID} -> ${OUT} (${W}x${H})"
-            # Print HTTP code only (no token leakage)
-            HTTP_CODE=$(curl -sS -L \
+            echo "Rendering ${OUT} from panelId=${PANEL_ID}"
+            curl -fSL \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "X-Grafana-Org-Id: ${ORG_ID}" \
-              -o "${OUT}" \
-              -w "%{http_code}" \
-              "${URL}")
-
-            echo "HTTP ${HTTP_CODE} for panel ${PANEL_ID}"
-            test "${HTTP_CODE}" = "200"
-
-            # Copy to debug folder so you can view it in the repo
-            cp "${OUT}" "debug/${OUT}"
-            ls -lh "debug/${OUT}"
+              "${URL}" \
+              -o "${OUT}"
+            ls -lh "${OUT}"
           }
 
-          render_panel 3 p3.png "${P3_PW}" "${P3_PH}"
-          render_panel 4 p4.png "${P4_PW}" "${P4_PH}"
-          render_panel 5 p5.png "${P5_PW}" "${P5_PH}"
-          render_panel 6 p6.png "${P6_PW}" "${P6_PH}"
+          render_panel "${P3}" "p3.png"
+          render_panel "${P4}" "p4.png"
+          render_panel "${P5}" "p5.png"
+          render_panel "${P6}" "p6.png"
 
-          # Create canvas + composite
-          convert -size ${CANVAS_W}x${CANVAS_H} xc:black canvas.png
-
-          convert canvas.png \
-            \( p3.png \) -geometry +${P3_PX}+${P3_PY} -composite \
-            \( p4.png \) -geometry +${P4_PX}+${P4_PY} -composite \
-            \( p5.png \) -geometry +${P5_PX}+${P5_PY} -composite \
-            \( p6.png \) -geometry +${P6_PX}+${P6_PY} -composite \
-            dashboard.png
-
-          ls -lh dashboard.png
-
-      - name: Commit updated images
+      - name: Commit PNGs
         run: |
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add dashboard.png debug/*.png || true
-          git commit -m "Update dashboard + debug panels" || exit 0
+          git add p3.png p4.png p5.png p6.png
+          git commit -m "Update panel PNGs" || exit 0
           git push
