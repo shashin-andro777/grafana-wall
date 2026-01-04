@@ -11,68 +11,47 @@
       height: 100%;
       background: black;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
-    #img {
+    img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       display: block;
     }
-    #msg {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      right: 10px;
-      padding: 10px 12px;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      font-size: 14px;
-      border-radius: 8px;
-      display: none;
-      z-index: 10;
-      word-break: break-word;
-    }
   </style>
 </head>
 <body>
-  <div id="msg"></div>
-  <img id="img" alt="Grafana Panel">
+  <img id="img" src="p3.png?cb=0" alt="Grafana Panel">
 
   <script>
     (function () {
+      var panels = [
+        "p3.png",
+        "p4.png",
+        "p5.png",
+        "p6.png"
+      ];
+
+      var index = 0;
       var img = document.getElementById("img");
-      var msg = document.getElementById("msg");
-      var base = "dashboard.png";
 
-      function showMessage(text) {
-        msg.style.display = "block";
-        msg.textContent = text;
+      function showPanel(i) {
+        img.src = panels[i] + "?cb=" + new Date().getTime();
       }
 
-      function hideMessage() {
-        msg.style.display = "none";
-        msg.textContent = "";
-      }
+      // Rotate panel every 15 seconds
+      setInterval(function () {
+        index = (index + 1) % panels.length;
+        showPanel(index);
+      }, 15000);
 
-      function refresh() {
-        // Hard cache-bust every load
-        var url = base + "?cb=" + new Date().getTime();
-        hideMessage();
-        img.src = url;
-      }
+      // Refresh currently shown panel every 60 seconds
+      setInterval(function () {
+        showPanel(index);
+      }, 60000);
 
-      img.onload = function () {
-        hideMessage();
-      };
-
-      img.onerror = function () {
-        showMessage("Image failed to load: " + img.src);
-      };
-
-      // Load immediately, then refresh every 60s
-      refresh();
-      setInterval(refresh, 60000);
+      // Initial load
+      showPanel(index);
     })();
   </script>
 </body>
