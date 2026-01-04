@@ -1,4 +1,4 @@
-name: Render Grafana Panels (separate PNGs)
+name: Render Grafana Panel to PNG
 
 on:
   schedule:
@@ -12,10 +12,10 @@ jobs:
   render:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Render panels
+      - name: Render PNG from Grafana
         run: |
           set -euo pipefail
 
@@ -25,42 +25,30 @@ jobs:
           DASH_SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
           ORG_ID="1"
+          PANEL_ID="3"   # <-- change this if you want a different panel
           FROM="now-6h"
           TO="now"
           THEME="dark"
 
-          # Your panel IDs
-          P3=3
-          P4=4
-          P5=5
-          P6=6
+          WIDTH="1024"
+          HEIGHT="768"
 
-          # Render size (iPad-friendly). Adjust if you want.
-          W=1024
-          H=768
+          URL="${BASE}/render/d-solo/${DASH_UID}/${DASH_SLUG}?orgId=${ORG_ID}&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${WIDTH}&height=${HEIGHT}&theme=${THEME}"
 
-          render_panel () {
-            local PANEL_ID="$1"
-            local OUT="$2"
-            local URL="${BASE}/render/d-solo/${DASH_UID}/${DASH_SLUG}?orgId=${ORG_ID}&panelId=${PANEL_ID}&from=${FROM}&to=${TO}&width=${W}&height=${H}&theme=${THEME}"
-            echo "Rendering ${OUT} from panelId=${PANEL_ID}"
-            curl -fSL \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -H "X-Grafana-Org-Id: ${ORG_ID}" \
-              "${URL}" \
-              -o "${OUT}"
-            ls -lh "${OUT}"
-          }
+          echo "Rendering: $URL"
 
-          render_panel "${P3}" "p3.png"
-          render_panel "${P4}" "p4.png"
-          render_panel "${P5}" "p5.png"
-          render_panel "${P6}" "p6.png"
+          curl -fSL \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "X-Grafana-Org-Id: ${ORG_ID}" \
+            "$URL" \
+            -o dashboard.png
 
-      - name: Commit PNGs
+          ls -lh dashboard.png
+
+      - name: Commit updated image
         run: |
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add p3.png p4.png p5.png p6.png
-          git commit -m "Update panel PNGs" || exit 0
+          git add dashboard.png
+          git commit -m "Update dashboard.png" || exit 0
           git push
