@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grafana Wall</title>
   <style>
     html, body {
       margin: 0;
@@ -10,23 +11,69 @@
       height: 100%;
       background: black;
       overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
-    img {
+    #img {
       width: 100%;
       height: 100%;
       object-fit: contain;
       display: block;
     }
+    #msg {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      padding: 10px 12px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 14px;
+      border-radius: 8px;
+      display: none;
+      z-index: 10;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
-  <img id="img" src="dashboard.png?cb=0" alt="Grafana Panel">
+  <div id="msg"></div>
+  <img id="img" alt="Grafana Panel">
+
   <script>
-    // Force reload every 60 seconds (cache-busting)
-    setInterval(function () {
-      document.getElementById("img").src =
-        "dashboard.png?cb=" + new Date().getTime();
-    }, 60000);
+    (function () {
+      var img = document.getElementById("img");
+      var msg = document.getElementById("msg");
+      var base = "dashboard.png";
+
+      function showMessage(text) {
+        msg.style.display = "block";
+        msg.textContent = text;
+      }
+
+      function hideMessage() {
+        msg.style.display = "none";
+        msg.textContent = "";
+      }
+
+      function refresh() {
+        // Hard cache-bust every load
+        var url = base + "?cb=" + new Date().getTime();
+        hideMessage();
+        img.src = url;
+      }
+
+      img.onload = function () {
+        hideMessage();
+      };
+
+      img.onerror = function () {
+        showMessage("Image failed to load: " + img.src);
+      };
+
+      // Load immediately, then refresh every 60s
+      refresh();
+      setInterval(refresh, 60000);
+    })();
   </script>
 </body>
 </html>
