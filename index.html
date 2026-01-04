@@ -5,53 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Grafana Wall</title>
   <style>
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      background: black;
-      overflow: hidden;
-    }
-    img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
+    html, body { margin: 0; width: 100%; height: 100%; background: black; overflow: hidden; }
+    img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    #msg {
+      position: fixed; top: 10px; left: 10px; right: 10px;
+      padding: 10px 12px; background: rgba(0,0,0,0.6); color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      font-size: 14px; border-radius: 8px; display: none; z-index: 10;
+      word-break: break-word;
     }
   </style>
 </head>
 <body>
-  <img id="img" src="p3.png?cb=0" alt="Grafana Panel">
+  <div id="msg"></div>
+  <img id="img" alt="Grafana Panel">
 
   <script>
     (function () {
-      var panels = [
-        "p3.png",
-        "p4.png",
-        "p5.png",
-        "p6.png"
-      ];
-
-      var index = 0;
+      var panels = ["p3.png", "p4.png", "p5.png", "p6.png"];
+      var idx = 0;
       var img = document.getElementById("img");
+      var msg = document.getElementById("msg");
 
-      function showPanel(i) {
-        img.src = panels[i] + "?cb=" + new Date().getTime();
+      function showMessage(t) { msg.style.display = "block"; msg.textContent = t; }
+      function hideMessage() { msg.style.display = "none"; msg.textContent = ""; }
+
+      function loadCurrent() {
+        hideMessage();
+        img.src = panels[idx] + "?cb=" + new Date().getTime();
       }
 
-      // Rotate panel every 15 seconds
+      img.onload = function () { hideMessage(); };
+      img.onerror = function () {
+        showMessage("Missing/failed: " + img.src + " (does the PNG exist in repo?)");
+      };
+
+      // initial
+      loadCurrent();
+
+      // rotate every 15s
       setInterval(function () {
-        index = (index + 1) % panels.length;
-        showPanel(index);
+        idx = (idx + 1) % panels.length;
+        loadCurrent();
       }, 15000);
 
-      // Refresh currently shown panel every 60 seconds
+      // force refresh current image every 60s too
       setInterval(function () {
-        showPanel(index);
+        loadCurrent();
       }, 60000);
-
-      // Initial load
-      showPanel(index);
     })();
   </script>
 </body>
