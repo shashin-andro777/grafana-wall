@@ -22,7 +22,7 @@
 <body>
   <img id="img" src="dashboard.png?cb=0" alt="Grafana Panel">
   <script>
-    // Refresh image every 60 seconds (cache-busting)
+    // Force reload every 60 seconds (cache-busting)
     setInterval(function () {
       document.getElementById("img").src =
         "dashboard.png?cb=" + new Date().getTime();
