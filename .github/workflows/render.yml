@@ -1,4 +1,4 @@
-name: Render Full Dashboard (gridPos-accurate)
+name: Render Full Dashboard (gridPos accurate, no blank space)
 
 on:
   schedule:
@@ -20,7 +20,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
-      - name: Render panels using gridPos proportions and stitch
+      - name: Render panels using gridPos and stitch (fills canvas)
         run: |
           set -euo pipefail
 
@@ -30,7 +30,6 @@ jobs:
           UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
           SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
 
-          # ---- Dashboard render options ----
           FROM="now-6h"
           TO="now"
           THEME="dark"
@@ -38,25 +37,26 @@ jobs:
           # ---- Target canvas (iPad Gen 1 landscape) ----
           CANVAS_W=1024
           CANVAS_H=768
-          M=10   # outer margin in pixels
+          M=10   # outer margin
 
-          # ---- Grafana grid (from your dashboard JSON) ----
-          GRID_W=24
-          GRID_H=11   # max(y+h) from your JSON (row at y0 h1, bottom panels at y6 h5 => 11)
+          # ---- Used grid size from your JSON (fills, no blank space) ----
+          # Panels occupy columns 0..17 (18 wide) and rows 0..9 (10 tall)
+          GRID_W=18
+          GRID_H=10
 
-          # ---- Panel gridPos from your JSON (id, x, y, w, h) ----
-          # id=3  gridPos: x0  y1  w11 h5
-          # id=4  gridPos: x11 y1  w7  h5
-          # id=5  gridPos: x0  y6  w11 h5
-          # id=6  gridPos: x11 y6  w7  h5
-          P3_X=0;  P3_Y=1;  P3_W=11; P3_H=5
-          P4_X=11; P4_Y=1;  P4_W=7;  P4_H=5
-          P5_X=0;  P5_Y=6;  P5_W=11; P5_H=5
-          P6_X=11; P6_Y=6;  P6_W=7;  P6_H=5
+          # ---- Panel gridPos from your JSON ----
+          # id=3: x0  y0  w11 h5
+          # id=4: x11 y0  w7  h5
+          # id=5: x0  y5  w11 h5
+          # id=6: x11 y5  w7  h5
+          P3_X=0;  P3_Y=0;  P3_W=11; P3_H=5
+          P4_X=11; P4_Y=0;  P4_W=7;  P4_H=5
+          P5_X=0;  P5_Y=5;  P5_W=11; P5_H=5
+          P6_X=11; P6_Y=5;  P6_W=7;  P6_H=5
 
-          # ---- Compute pixels per grid unit (float), then per-panel pixel rectangles (int) ----
-          python3 - <<'PY'
-          import os, math
+          # Compute pixel rectangles from grid units
+          python3 - <<'PY' > sizes.sh
+          import os
 
           CANVAS_W = int(os.environ["CANVAS_W"])
           CANVAS_H = int(os.environ["CANVAS_H"])
@@ -80,14 +80,12 @@ jobs:
 
           for name in ["P3", "P4", "P5", "P6"]:
               px, py, pw, ph = rect(name)
-              print(f'echo "{name}: x={px} y={py} w={pw} h={ph}"')
               print(f'export {name}_PX={px} {name}_PY={py} {name}_PW={pw} {name}_PH={ph}')
+              print(f'echo "{name}: x={px} y={py} w={pw} h={ph}"')
 
-          print(f'echo "unit_w={unit_w:.4f} unit_h={unit_h:.4f}  (GRID {GRID_W}x{GRID_H}, canvas {CANVAS_W}x{CANVAS_H}, margin {M})"')
+          print(f'echo "Grid {GRID_W}x{GRID_H} -> canvas {CANVAS_W}x{CANVAS_H} (margin {M}), unit_w={unit_w:.4f}, unit_h={unit_h:.4f}"')
           PY
-          ) > sizes.sh
 
-          # Load the exported sizes into this shell
           source sizes.sh
 
           render_panel () {
@@ -106,7 +104,7 @@ jobs:
           render_panel 5 p5.png "${P5_PW}" "${P5_PH}"
           render_panel 6 p6.png "${P6_PW}" "${P6_PH}"
 
-          # Create final canvas and composite panels at computed pixel positions
+          # Stitch onto a black canvas
           convert -size ${CANVAS_W}x${CANVAS_H} xc:black canvas.png
 
           convert canvas.png \
@@ -116,7 +114,6 @@ jobs:
             \( p6.png \) -geometry +${P6_PX}+${P6_PY} -composite \
             dashboard.png
 
-          echo "Final stitched image:"
           ls -lh dashboard.png
 
       - name: Commit updated image
@@ -124,5 +121,5 @@ jobs:
           git config user.name "grafana-wall-bot"
           git config user.email "actions@users.noreply.github.com"
           git add dashboard.png
-          git commit -m "Update dashboard.png (gridPos)" || exit 0
+          git commit -m "Update dashboard.png (gridPos v11)" || exit 0
           git push
