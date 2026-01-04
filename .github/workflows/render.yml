@@ -27,8 +27,9 @@ jobs:
           # ---- Sanitize secrets (prevents hidden CR/LF issues) ----
           TOKEN="$(printf '%s' "${{ secrets.GRAFANA_TOKEN }}" | tr -d '\r\n')"
           BASE="$(printf '%s' "${{ secrets.GRAFANA_URL }}" | tr -d '\r\n')"
-          UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
-          SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
+          DASH_UID="$(printf '%s' "${{ secrets.DASH_UID }}" | tr -d '\r\n')"
+          DASH_SLUG="$(printf '%s' "${{ secrets.DASH_SLUG }}" | tr -d '\r\n')"
+
 
           FROM="now-6h"
           TO="now"
